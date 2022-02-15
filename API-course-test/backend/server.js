@@ -3,6 +3,9 @@ const dotenv = require('dotenv').config()
 port = process.env.PORT || 5000
 const colors = require('colors');
 const {errorHandler} = require('./middleware/errorMiddleware')
+const connectDB = require('./config/db');
+
+connectDB();
 const app = express();
 
 app.use(express.json())
@@ -14,6 +17,9 @@ app.get('/', (req, res) =>{
 
 //Connecting the server to goal ROUTES
 app.use('/api/goals', require('./routes/goalRoutes'))
+
+//Connecting the server to user ROUTES
+app.use('/api/users', require('./routes/userRoutes'))
 
 //middleware errorHandler
 app.use(errorHandler)
