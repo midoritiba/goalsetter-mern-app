@@ -5,7 +5,7 @@ const Goal = require('../models/goalModel')
 //@route GET /api/goals
 //@access PRIVATE
 const getGoals = asyncHandler(async(req, res)=> {
-    const goals = await Goals.find()
+    const goals = await Goal.find()
     res.status(200).json(goals)
 })
 
@@ -31,11 +31,10 @@ const updateGoal = asyncHandler(async(req, res) => {
 
     if(!goal){
         res.status(400)
-        throw new Error ('Goal not found :(')
+        throw new Error('Goal not found')
     }
-
-    const updatedGoal = await Goal.findByIdAndUpdate(req.params.id, req.body{
-        new: true
+    const updatedGoal = await Goal.findByIdAndUpdate(req.params.id, req.body, {
+        new:true,
     })
     res.status(200).json(updatedGoal)
 })
@@ -52,7 +51,7 @@ const deleteGoal = asyncHandler(async(req, res) => {
     }
 
     await goal.remove()
-    res.status(200).json({message: `Goal with id ${req.params.id} deleted`})
+    res.status(200).json({message: `Goal with id "${req.params.id}" deleted`})
 })
 
 module.exports = {
