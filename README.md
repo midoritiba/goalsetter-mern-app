@@ -441,7 +441,236 @@ Bulk Edit
     const asyncHandler = require('express-async-handler')
     const User = require('../models/userModel')
 
----
+## 5 . In userControllers still:
+
+    - wrap our variables in asyncHandler + async functions
+
+## 6. userController > working on const registerUser:
+
+    const { name, email, password } = req.body
+
+    if(!name || !email || !password){
+        res.status(400)
+        throw new Error ('Please add all fields')
+    }
+
+    //Check if the user exists
+    const userExists = await User.findOne({email})
+
+    if(userExists){
+        res.status(400)
+        throw new Error('User already exists')
+    }
+
+        //Hash password
+        const salt = await bcrypt.genSalt(10)
+        const hashedPassword = await bcrypt.hash(password, salt)
+
+        //Create user
+        const user = await User.create({
+            name,
+            email,
+            password: hashedPassword
+        })
+
+        if(user){
+        res.status(200).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email
+        })
+        }else{
+            res.status(400)
+            throw new Error ('Invalid user data')
+        }
+
+## 7. Authenticate/Login user > const loginUser:
+
+    const loginUser = asyncHandler(async(req, res) => {
+    const { email, password } = req.body
+
+    //Check for user email
+    const user = await User.findOne({email})
+    //Compare password passed with the user that just tried to register with his password in the data
+    const comparePassword = await bcrypt.compare(password, user.password)
+
+    //Matching the password
+    if(user && comparePassword){
+        res.json({
+            _id: user._id,
+            name: user.name,
+            email: user.email
+        })
+    } else{
+        res.status(400)
+        throw new Error ('Invalid credentions')
+    }
+    res.json({message: 'Login User'})
+    })
+
+## 8. Create a Token - we need to use it in loginUser and registerUser
+
+    - We need to create in .env a JWT_SECRET
+    (this case = abc123)
+    - create a generateToken function:
+    //Generate Token(JWT)
+    const generateToken = (id) =>{
+        return jwt.sign({id}, process.env.JWT_SECRET, {
+        expiresIn = '30d'
+        })
+    }
+
+    - create a token option in loginUser and registerUser:
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            token: generateToken(user._id)
+
+## 9. We need now to protect routes, the getMe function will have a PRIVATE access:
+
+    - create in middleware file called 'authMiddleware.js':
+    const jwt = require ('jsonwebtoken')
+    const asyncHandler = require ('express-async-handler')
+    const User = require ('../models/userModel')
+
+    const protect = asyncHandler(async(req, res, next) => {
+        let token
+
+        if(req.header.authorization && req.header.authorization.startsWith('Bearer')){
+            try {
+                //Get token from Header
+                token = req.header.authorization.split(' ')[1]
+
+                //Verify token
+                const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+                //Get user from the token - since we generated the token using the id (function generateToken in userController), thats what we use to try to find the user. But we dont want the password to be display
+                req.user = await User.findById(decoded.id).select('-password')
+
+                next()
+            } catch (error) {
+                console.log(error)
+                //401 status means not authorized
+                res.status(401)
+                throw new Error('Not authorized')
+            }
+        }
+        if(!token){
+            res.status(401)
+            throw new Error('Not authorized, no token')
+        }
+    })
+
+module.exports = { protect }
+
+## 10. Now we can go back to server.js:
+
+        - use the protect middleware in the function getMe:
+        const { protect } = require ('../middleware/authMiddleware')
+
+        //GET - Display user data
+        router.get('/me',protect, getMe)
+
+## 11. Back to userController, set up the function getMe:
+
+    const getMe = asyncHandler(async(req, res) => {
+        const { _id, name, email } = await User.findById(req.user.id)
+
+        res.status(200).json({
+            id: _id,
+            name,
+            email
+        })
+
+    }
+    )
+
+## 12. Now we can protect all our goalRoutes as well in:
+
+    const { protect } = require ('../middleware/authMiddleware')
+
+    //GET GOALS && POST GOAL
+    router.route('/').get(protect, getGoals).post(protect, setGoal)
+
+    //PUT GOAL && DELETE GOAL
+    router.route('/:id').put(protect, updateGoal).delete(protect, deleteGoal)
+
+## 13. Now we go to goalController:
+
+    Here we need to setup a user attached to the goal. Because now we have a relationship between those two routes:
+    const getGoals = asyncHandler(async(req, res)=> {
+    const goals = await Goal.find({ user: req.user.id })
+    res.status(200).json(goals)
+    })
+
+## 14. We also need to connect the user with the function setGoal:
+
+    const setGoal = asyncHandler(async(req, res) => {
+    if(!req.body.text){
+        res.status(400)
+        throw new Error ('Please add a text field')
+    }
+    const goal = await Goal.create({
+        text: req.body.text,
+        user: req.user.id
+    })
+    res.status(200).json(goal)
+    })
+
+## 15. We want to also prevent users to update and delete others users goals, in goalController:
+
+        const updateGoal = asyncHandler(async(req, res) => {
+        const goal = await Goal.findById(req.params.id)
+
+        if(!goal){
+            res.status(400)
+            throw new Error('Goal not found')
+        }
+        const user = await User.findById(req.user.id)
+
+        //Check for user
+        if(!user){
+            res.status(401)
+            throw new Error('User not found')
+        }
+        //Make sure the logged in user matches the goal user
+        if(goal.user.toString() !== user.id){
+            res.status(401)
+            throw new Error('User not authorized')
+        }
+
+        const updatedGoal = await Goal.findByIdAndUpdate(req.params.id, req.body, {
+            new:true,
+        })
+        res.status(200).json(updatedGoal)
+    })
+
+## 16. We do the same thing for the function deleteGoal:
+
+    const deleteGoal = asyncHandler(async(req, res) => {
+        const goal = await Goal.findById(req.params.id)
+
+        if(!goal){
+            res.status(400)
+            throw new Error('Goal not found :(')
+        }
+
+        const user = await User.findById(req.user.id)
+
+        //Check for user
+        if(!user){
+            res.status(401)
+            throw new Error('User not found')
+        }
+        //Make sure the logged in user matches the goal user
+        if(goal.user.toString() !== user.id){
+            res.status(401)
+            throw new Error('User not authorized')
+        }
+
+        await goal.remove()
+        res.status(200).json({message: `Goal with id "${req.params.id}" deleted`})
+    })
 
 # Third video [https://www.youtube.com/watch?v=mvfsC66xqj0]
 
