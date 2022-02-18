@@ -1,5 +1,5 @@
 const express = require ('express')
-const { getGoals, setGoal, updateGoal, deleteGoal } = require('../controllers/goalControllersjs')
+const { getGoals, setGoal, updateGoal, deleteGoal } = require('../controllers/goalController.js')
 const router = express.Router()
 
 //GET GOALS && POST GOAL
