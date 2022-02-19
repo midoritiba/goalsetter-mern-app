@@ -976,7 +976,8 @@ module.exports = { protect }
         user: user ? user : null,
         isError: false,
         isSuccess: false,
-        message: ''
+        isLoading: false,
+        message: '',
     }
 
     export const authSlice = createSlice({
